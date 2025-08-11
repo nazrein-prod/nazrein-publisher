@@ -14,8 +14,6 @@ WORKDIR /app
 
 COPY --from=builder /build/publisher .
 
-COPY --from=builder /build/migrations ./migrations
-
 USER nonroot:nonroot
 
 CMD ["/app/publisher"]
