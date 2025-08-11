@@ -1,4 +1,4 @@
-module github.com/grvbrk/trackyt
+module github.com/grvbrk/nazrein_publisher
 
 go 1.23.3
 

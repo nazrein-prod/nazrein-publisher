@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -11,8 +12,8 @@ import (
 )
 
 const (
-	interval  = 10 * time.Minute
-	streamKey = "trackyt"
+	interval  = 1 * time.Hour
+	streamKey = "nazrein"
 )
 
 type Video struct {
@@ -27,28 +28,38 @@ type Video struct {
 	Channel_ID    string    `json:"channel_id"`
 	User_ID       string    `json:"user_id"`
 	Is_Active     bool      `json:"is_active"`
+	Visits        int       `json:"visits"`
 	Created_At    time.Time `json:"created_at"`
 	Updated_At    time.Time `json:"updated_at"`
+}
+
+type RedisVideo struct {
+	Id         string `json:"id"`
+	Link       string `json:"link"`
+	Youtube_ID string `json:"youtube_id"`
 }
 
 func main() {
 
 	ctx := context.Background()
 
-	db, err := sql.Open("pgx", "host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable")
+	db, err := sql.Open("pgx", os.Getenv("DB_URL"))
 	if err != nil {
 		panic(fmt.Errorf("error connecting to db. %w", err))
 	}
 
-	defer db.Close()
+	defer func() {
+		err := db.Close()
+		fmt.Println("Error closing db", err)
+	}()
 
-	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-		Protocol: 2,
-	})
-	defer client.Close()
+	opt, _ := redis.ParseURL(os.Getenv("REDIS_URL"))
+	client := redis.NewClient(opt)
+
+	defer func() {
+		err := client.Close()
+		fmt.Println("Error closing redis client", err)
+	}()
 
 	FetchDataFromPostgres(ctx, db, client)
 	TickerInterval(ctx, db, client)
@@ -72,7 +83,7 @@ func TickerInterval(ctx context.Context, db *sql.DB, client *redis.Client) {
 
 func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client) {
 
-	var videoArr []Video
+	var videoArr []RedisVideo
 
 	query := `
 		SELECT id, link, youtube_id
@@ -84,10 +95,13 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 		fmt.Println("error getting data from db %w", err)
 	}
 
-	defer rows.Close()
+	defer func() {
+		err := rows.Close()
+		fmt.Println("Error closing rows", err)
+	}()
 
 	for rows.Next() {
-		var video Video
+		var video RedisVideo
 		err = rows.Scan(&video.Id, &video.Link, &video.Youtube_ID)
 		if err != nil {
 			fmt.Println("error scanning row of rows.Next() %w", err)
@@ -97,7 +111,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 		videoArr = append(videoArr, video)
 	}
 
-	fmt.Printf("Length of videoArr: %d Time: %s\n", len(videoArr), time.Now().Format("2006-01-02 15:04:05"))
+	// fmt.Printf("Length of videoArr: %d Time: %s\n", len(videoArr), time.Now().Format("2006-01-02 15:04:05"))
 
 	for _, v := range videoArr {
 		values := map[string]interface{}{
@@ -106,7 +120,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 			"youtube_id": v.Youtube_ID,
 		}
 
-		_, err = client.XAdd(ctx, &redis.XAddArgs{
+		msgID, err := client.XAdd(ctx, &redis.XAddArgs{
 			Stream: streamKey,
 			Values: values,
 			ID:     "*",
@@ -116,8 +130,6 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 			fmt.Println("error adding values of redis streams %w", err)
 		}
 
+		fmt.Printf("Added to redis stream. Time: %s\n msgID: %s\n", time.Now().Format("2006-01-02 15:04:05"), msgID)
 	}
-
-	fmt.Printf("Added to redis stream. Time: %s\n", time.Now().Format("2006-01-02 15:04:05"))
-
 }
