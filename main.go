@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -49,16 +48,18 @@ func main() {
 	}
 
 	defer func() {
-		err := db.Close()
-		fmt.Println("Error closing db", err)
+		if err := db.Close(); err != nil {
+			fmt.Println("Error closing db:", err)
+		}
 	}()
 
-	opt, _ := redis.ParseURL(os.Getenv("UPSTASH_REDIS_URL"))
-	client := redis.NewClient(opt)
+	client := connectRedis()
 
 	defer func() {
-		err := client.Close()
-		fmt.Println("Error closing redis client", err)
+		if err := client.Close(); err != nil {
+			fmt.Println("Error closing redis client", err)
+		}
+
 	}()
 
 	FetchDataFromPostgres(ctx, db, client)
@@ -90,14 +91,15 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 		FROM videos
 	`
 
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		fmt.Println("error getting data from db %w", err)
 	}
 
 	defer func() {
-		err := rows.Close()
-		fmt.Println("Error closing rows", err)
+		if err := rows.Close(); err != nil {
+			fmt.Println("Error closing rows", err)
+		}
 	}()
 
 	for rows.Next() {
