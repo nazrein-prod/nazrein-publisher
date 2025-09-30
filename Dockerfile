@@ -8,7 +8,7 @@ RUN (curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://cli.doppler.com/insta
 
 COPY go.mod go.sum ./
 RUN go mod download
-COPY main.go .
+COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o publisher
 
