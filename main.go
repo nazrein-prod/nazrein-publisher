@@ -43,7 +43,7 @@ func main() {
 
 	ctx := context.Background()
 
-	db, err := sql.Open("pgx", os.Getenv("DB_URL"))
+	db, err := ConnectPGDB()
 	if err != nil {
 		panic(fmt.Errorf("error connecting to db. %w", err))
 	}
@@ -53,7 +53,7 @@ func main() {
 		fmt.Println("Error closing db", err)
 	}()
 
-	opt, _ := redis.ParseURL(os.Getenv("REDIS_URL"))
+	opt, _ := redis.ParseURL(os.Getenv("UPSTASH_REDIS_URL"))
 	client := redis.NewClient(opt)
 
 	defer func() {
