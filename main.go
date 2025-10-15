@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	service "github.com/grvbrk/nazrein_publisher/internal/db"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/redis/go-redis/v9"
 )
@@ -42,7 +43,7 @@ func main() {
 
 	ctx := context.Background()
 
-	db, err := ConnectPGDB()
+	db, err := service.ConnectPGDB()
 	if err != nil {
 		panic(fmt.Errorf("error connecting to db. %w", err))
 	}
@@ -53,7 +54,7 @@ func main() {
 		}
 	}()
 
-	client := connectRedis()
+	client := service.ConnectRedis()
 
 	defer func() {
 		if err := client.Close(); err != nil {
@@ -106,7 +107,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 		var video RedisVideo
 		err = rows.Scan(&video.Id, &video.Link, &video.Youtube_ID)
 		if err != nil {
-			fmt.Println("error scanning row of rows.Next() %w", err)
+			fmt.Println("error scanning rows %w", err)
 			continue
 		}
 
@@ -115,6 +116,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 
 	// fmt.Printf("Length of videoArr: %d Time: %s\n", len(videoArr), time.Now().Format("2006-01-02 15:04:05"))
 
+	// loop over the videos and add them to the redis stream
 	for _, v := range videoArr {
 		values := map[string]interface{}{
 			"id":         v.Id,
@@ -125,7 +127,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 		msgID, err := client.XAdd(ctx, &redis.XAddArgs{
 			Stream: streamKey,
 			Values: values,
-			ID:     "*",
+			ID:     "*", // let redis autogenerate an ID for the message
 		}).Result()
 
 		if err != nil {

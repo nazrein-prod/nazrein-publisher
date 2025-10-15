@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func connectRedis() *redis.Client {
+func ConnectRedis() *redis.Client {
 
 	url := os.Getenv("UPSTASH_REDIS_URL")
 	if url == "" {
