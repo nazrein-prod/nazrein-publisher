@@ -84,56 +84,48 @@ func TickerInterval(ctx context.Context, db *sql.DB, client *redis.Client) {
 }
 
 func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client) {
-
 	var videoArr []RedisVideo
 
 	query := `
-		SELECT id, link, youtube_id
-		FROM videos
-	`
+        SELECT id, link, youtube_id
+        FROM videos
+    `
 
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		fmt.Println("error getting data from db %w", err)
+		fmt.Println("error getting data from db:", err)
+		return
 	}
-
-	defer func() {
-		if err := rows.Close(); err != nil {
-			fmt.Println("Error closing rows", err)
-		}
-	}()
+	defer rows.Close()
 
 	for rows.Next() {
 		var video RedisVideo
-		err = rows.Scan(&video.Id, &video.Link, &video.Youtube_ID)
-		if err != nil {
-			fmt.Println("error scanning rows %w", err)
+		if err := rows.Scan(&video.Id, &video.Link, &video.Youtube_ID); err != nil {
+			fmt.Println("error scanning rows:", err)
 			continue
 		}
-
 		videoArr = append(videoArr, video)
 	}
 
-	// fmt.Printf("Length of videoArr: %d Time: %s\n", len(videoArr), time.Now().Format("2006-01-02 15:04:05"))
+	if err := rows.Err(); err != nil {
+		fmt.Printf("error iterating rows: %v\n", err)
+		return
+	}
 
-	// loop over the videos and add them to the redis stream
 	for _, v := range videoArr {
-		values := map[string]interface{}{
-			"id":         v.Id,
-			"link":       v.Link,
-			"youtube_id": v.Youtube_ID,
-		}
-
-		msgID, err := client.XAdd(ctx, &redis.XAddArgs{
+		_, err := client.XAdd(ctx, &redis.XAddArgs{
 			Stream: streamKey,
-			Values: values,
-			ID:     "*", // let redis autogenerate an ID for the message
+			MaxLen: 1000,
+			Values: map[string]interface{}{
+				"id":         v.Id,
+				"link":       v.Link,
+				"youtube_id": v.Youtube_ID,
+			},
 		}).Result()
 
 		if err != nil {
-			fmt.Println("error adding values of redis streams %w", err)
+			fmt.Println("error adding to redis stream:", err)
 		}
-
-		fmt.Printf("Added to redis stream. Time: %s\n msgID: %s\n", time.Now().Format("2006-01-02 15:04:05"), msgID)
 	}
+
 }

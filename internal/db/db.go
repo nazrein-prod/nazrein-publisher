@@ -12,12 +12,17 @@ func ConnectPGDB() (*sql.DB, error) {
 	var db *sql.DB
 	var err error
 
-	// Retry up to 10 times, waiting 3 seconds between attempts
+	// Retry up to 10 times, waiting 5 seconds between attempts
 	for i := 1; i <= 10; i++ {
 		db, err = sql.Open("pgx", dsn)
 		if err != nil {
 			fmt.Printf("Attempt %d: failed to open DB: %v\n", i, err)
 		} else {
+			db.SetMaxOpenConns(25)
+			db.SetMaxIdleConns(5)
+			db.SetConnMaxLifetime(5 * time.Minute)
+			db.SetConnMaxIdleTime(10 * time.Minute)
+
 			err = db.Ping()
 			if err == nil {
 				fmt.Println("Connected to Database!")
@@ -26,9 +31,8 @@ func ConnectPGDB() (*sql.DB, error) {
 			fmt.Printf("Attempt %d: DB not ready: %v\n", i, err)
 		}
 
-		time.Sleep(3 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 
-	// All retries failed
 	return nil, fmt.Errorf("could not connect to database after multiple attempts: %w", err)
 }
