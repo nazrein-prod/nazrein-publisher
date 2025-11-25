@@ -113,7 +113,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 	}
 
 	for _, v := range videoArr {
-		_, err := client.XAdd(ctx, &redis.XAddArgs{
+		msgID, err := client.XAdd(ctx, &redis.XAddArgs{
 			Stream: streamKey,
 			MaxLen: 1000,
 			Values: map[string]interface{}{
@@ -126,6 +126,7 @@ func FetchDataFromPostgres(ctx context.Context, db *sql.DB, client *redis.Client
 		if err != nil {
 			fmt.Println("error adding to redis stream:", err)
 		}
+		fmt.Printf("Added to redis stream. Time: %s\n msgID: %s\n", time.Now().Format("2006-01-02 15:04:05"), msgID)
 	}
 
 }
