@@ -1,12 +1,7 @@
-name: nazrein publisher
+name: CICD PROD Deployment
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -17,7 +12,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23.x"
+          go-version: "1.27.x"
 
       - name: Deps cache
         id: cache-go-deps
