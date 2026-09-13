@@ -14,7 +14,7 @@ import (
 	"github.com/grvbrk/nazrein_publisher/internal/config"
 	service "github.com/grvbrk/nazrein_publisher/internal/db"
 	applogger "github.com/grvbrk/nazrein_publisher/internal/logger"
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 )
 
