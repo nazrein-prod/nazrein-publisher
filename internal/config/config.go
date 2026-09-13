@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -19,7 +19,7 @@ type Config struct {
 	MaxLenBuffer int64
 }
 
-func NewConfig(logger *log.Logger) *Config {
+func NewConfig(logger *slog.Logger) *Config {
 	cfg := &Config{
 		StreamName:   DefaultStreamName,
 		Interval:     DefaultInterval,
@@ -33,7 +33,7 @@ func NewConfig(logger *log.Logger) *Config {
 	if v := os.Getenv("PUBLISH_INTERVAL"); v != "" {
 		parsed, err := time.ParseDuration(v)
 		if err != nil {
-			logger.Printf("invalid PUBLISH_INTERVAL=%q, using %s", v, DefaultInterval)
+			logger.Warn("invalid PUBLISH_INTERVAL, using default", "value", v, "default", DefaultInterval)
 		} else {
 			cfg.Interval = parsed
 		}
@@ -42,7 +42,7 @@ func NewConfig(logger *log.Logger) *Config {
 	if v := os.Getenv("STREAM_MAXLEN_BUFFER"); v != "" {
 		parsed, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || parsed < 0 {
-			logger.Printf("invalid STREAM_MAXLEN_BUFFER=%q, using %d", v, DefaultMaxLenBuffer)
+			logger.Warn("invalid STREAM_MAXLEN_BUFFER, using default", "value", v, "default", DefaultMaxLenBuffer)
 		} else {
 			cfg.MaxLenBuffer = parsed
 		}

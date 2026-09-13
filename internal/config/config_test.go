@@ -2,12 +2,14 @@ package config
 
 import (
 	"io"
-	"log"
+	"log/slog"
 	"testing"
 	"time"
 )
 
-func quietLogger() *log.Logger { return log.New(io.Discard, "", 0) }
+func quietLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 // With no env set the service must behave exactly as it did when these values
 // were hardcoded in main.go.

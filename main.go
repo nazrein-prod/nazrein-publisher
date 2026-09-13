@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/grvbrk/nazrein_publisher/internal/config"
 	service "github.com/grvbrk/nazrein_publisher/internal/db"
+	applogger "github.com/grvbrk/nazrein_publisher/internal/logger"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/redis/go-redis/v9"
 )
@@ -24,7 +25,8 @@ type RedisVideo struct {
 }
 
 func main() {
-	logger := log.New(os.Stdout, "PUBLISHER: ", log.Ldate|log.Ltime)
+	logger := applogger.New("publisher")
+	slog.SetDefault(logger)
 	cfg := config.NewConfig(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -32,12 +34,13 @@ func main() {
 
 	db, err := service.ConnectPGDB()
 	if err != nil {
-		logger.Fatalf("error connecting to db: %v", err)
+		logger.Error("error connecting to db", "err", err)
+		os.Exit(1)
 	}
 
 	defer func() {
 		if err := db.Close(); err != nil {
-			logger.Println("Error closing db:", err)
+			logger.Warn("Error closing db", "err", err)
 		}
 	}()
 
@@ -45,19 +48,19 @@ func main() {
 
 	defer func() {
 		if err := client.Close(); err != nil {
-			logger.Println("Error closing redis client", err)
+			logger.Warn("Error closing redis client", "err", err)
 		}
 	}()
 
-	logger.Printf("Publishing every %s to stream %q", cfg.Interval, cfg.StreamName)
+	logger.Info("Starting publisher", "interval", cfg.Interval, "stream", cfg.StreamName)
 
 	Publish(ctx, logger, cfg, db, client)
 	TickerInterval(ctx, logger, cfg, db, client)
 
-	logger.Println("Shutdown complete")
+	logger.Info("Shutdown complete")
 }
 
-func TickerInterval(ctx context.Context, logger *log.Logger, cfg *config.Config, db *sql.DB, client *redis.Client) {
+func TickerInterval(ctx context.Context, logger *slog.Logger, cfg *config.Config, db *sql.DB, client *redis.Client) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
 
@@ -66,34 +69,38 @@ func TickerInterval(ctx context.Context, logger *log.Logger, cfg *config.Config,
 		case <-ticker.C:
 			Publish(ctx, logger, cfg, db, client)
 		case <-ctx.Done():
-			logger.Println("Signal received, stopping data sync")
+			logger.Info("Signal received, stopping data sync")
 			return
 		}
 	}
 }
 
-func Publish(ctx context.Context, logger *log.Logger, cfg *config.Config, db *sql.DB, client *redis.Client) {
+func Publish(ctx context.Context, logger *slog.Logger, cfg *config.Config, db *sql.DB, client *redis.Client) {
 	start := time.Now()
 
 	videos, err := fetchVideos(ctx, db)
 	if err != nil {
-		logger.Println("error reading videos:", err)
+		logger.Error("error reading videos", "err", err)
 		return
 	}
 
 	if len(videos) == 0 {
-		logger.Println("No videos to publish")
+		logger.Info("No videos to publish")
 		return
 	}
 
 	published, err := publishToStream(ctx, cfg, client, videos)
 	if err != nil {
-		logger.Printf("error publishing to stream: %v (published %d/%d)", err, published, len(videos))
+		logger.Error("error publishing to stream", "err", err, "published", published, "total", len(videos))
 		return
 	}
 
-	logger.Printf("Published %d/%d videos to %q in %s",
-		published, len(videos), cfg.StreamName, time.Since(start).Round(time.Millisecond))
+	logger.Info("Published videos to stream",
+		"published", published,
+		"total", len(videos),
+		"stream", cfg.StreamName,
+		"duration", time.Since(start).Round(time.Millisecond),
+	)
 }
 
 func fetchVideos(ctx context.Context, db *sql.DB) ([]RedisVideo, error) {
